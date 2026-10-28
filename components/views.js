@@ -5,6 +5,7 @@ import { techItems } from "../lib/intel.js";
 import { runTools } from "../lib/toolbox.js";
 import { suggestFixes } from "../lib/content.js";
 import { performanceReport } from "../lib/performance.js";
+import { BarChart, MeterChart } from "./Charts";
 
 function n(value) {
   return new Intl.NumberFormat("en").format(value || 0);
@@ -151,24 +152,22 @@ export function AuditView({ project }) {
 
 function PerformancePanel({ page }) {
   const report = performanceReport(page);
-  const cards = [
-    ["Document time", `${report.ms} ms`],
-    ["HTML size", `${report.kb} KB`],
-    ["Files linked", report.requests == null ? "—" : String(report.requests)],
-    ["Image score", `${report.images}`],
-    ["Security", `${report.security}`],
-    ["Compression", report.encoding],
-  ];
   return (
     <section>
       <h2>Measured performance</h2>
-      <p className="muted">These figures come from the HTML response and the files it links. This is not a GTmetrix filmstrip and not a guessed grade. Browser Core Web Vitals still need a PageSpeed Insights key in Intel.</p>
-      <div className="kpis">
-        {cards.map(([label, value]) => (
-          <div key={label}><b>{value}</b><span className="muted">{label}</span></div>
-        ))}
-      </div>
-      <p className="muted">Structure score {report.structure}. Cache-Control: {report.cache}</p>
+      <p className="muted">These figures come from the HTML response and the files it links. Hover a bar for the reading. This is not a GTmetrix filmstrip and not a guessed grade. Browser Core Web Vitals still need a PageSpeed Insights key in Intel.</p>
+      <MeterChart
+        title="Response mix"
+        caption={`${report.ms} ms document · ${report.kb} KB HTML · ${report.requests == null ? "file count needs a recrawl" : `${report.requests} files linked`} · ${report.encoding}`}
+        rows={[
+          { label: "Speed", value: report.speed, note: "From document time, HTML weight, and blocking scripts." },
+          { label: "Images", value: report.images, note: "Alt text and width/height on the images in the HTML." },
+          { label: "Security", value: report.security, note: "HTTPS plus HSTS, CSP, nosniff, and frame options." },
+          { label: "Delivery", value: report.optimization, note: "Compression, cache, and how many files the HTML references." },
+          { label: "Structure", value: report.structure, note: "A weighted mix of the four readings above." },
+        ]}
+      />
+      <p className="muted">Cache-Control: {report.cache}</p>
       {report.notes.map((note) => <div className="issue" key={note}>{note}</div>)}
     </section>
   );
@@ -717,20 +716,104 @@ export function IntelView({ project, insights, act, busy }) {
   );
 }
 
+function pagePath(url) {
+  try {
+    const path = new URL(url).pathname || "/";
+    return path.length > 16 ? `${path.slice(0, 14)}…` : path;
+  } catch {
+    return url;
+  }
+}
+
 export function ReportView({ project, insights, act, busy, onDelete }) {
   const [name, setName] = useState(project.name);
   const [brandTerms, setBrandTerms] = useState((project.brandTerms || []).join(", "));
   const [maxPages, setMaxPages] = useState(project.maxPages || 8);
+  const pages = (project.pages || []).filter((page) => page && !page.error).slice(0, 12);
+  const [picked, setPicked] = useState(0);
+  const page = pages[picked] || pages[0];
+  const report = page ? performanceReport(page) : null;
+  const issues = pages.flatMap((item) => item.scores?.issues || []);
+  const severity = ["critical", "warning", "opportunity"].map((label) => ({
+    id: label,
+    label,
+    short: label.slice(0, 4),
+    value: issues.filter((item) => item.severity === label).length,
+  }));
   return (
     <>
       <header className="topbar">
         <div>
           <h1>Report</h1>
-          <p className="muted">A single HTML file with the scores, priority fixes, keyword opportunities, and prompt coverage currently in this workspace.</p>
+          <p className="muted">Hover or select a bar. Every value is the HTML that was fetched, or a Search Console figure you imported. Nothing here is a guessed lab grade.</p>
         </div>
         <a className="btn" href={`/api/projects/${project.id}/report`}>Download HTML</a>
       </header>
       <Scores insights={insights} />
+      <div className="chart-grid">
+        <MeterChart
+          title="Crawl scores"
+          caption="Averages across the indexable pages in this crawl."
+          rows={[
+            { label: "SEO", value: insights.scores.seo, note: "On-page tags, technical checks, and content depth." },
+            { label: "GEO", value: insights.scores.geo, note: "Answer-first copy, question headings, lists, tables, schema, and citations." },
+            { label: "E-E-A-T", value: insights.scores.eeat, note: "Author, date, and about or contact links found in the crawl." },
+            { label: "Technical", value: insights.scores.technical, note: "HTTPS, status, canonical, language, viewport, and response time." },
+          ]}
+        />
+        <BarChart
+          title="Issues by severity"
+          caption="Counted on the pages in this chart, not estimated for the rest of the site."
+          unit="issues"
+          points={severity}
+          active={0}
+        />
+      </div>
+      {pages.length ? (
+        <div className="chart-grid">
+          <BarChart
+            title="Document time"
+            caption="Select a page. The target used in the score is under 800 ms for the HTML document."
+            unit="ms"
+            points={pages.map((item) => ({ id: item.url, label: item.finalUrl || item.url, short: pagePath(item.url), value: item.ms || 0 }))}
+            active={picked}
+            onPick={setPicked}
+          />
+          <BarChart
+            title="HTML size"
+            caption="Document weight before images and scripts."
+            unit="KB"
+            points={pages.map((item) => ({ id: `${item.url}-kb`, label: item.finalUrl || item.url, short: pagePath(item.url), value: Math.round((item.htmlBytes || 0) / 1024) }))}
+            active={picked}
+            onPick={setPicked}
+          />
+        </div>
+      ) : <p className="empty">Crawl a site to draw the page charts.</p>}
+      {report ? (
+        <MeterChart
+          title={`Response mix · ${pagePath(page.url)}`}
+          caption={`${report.ms} ms · ${report.kb} KB · ${report.requests == null ? "recrawl to count files" : `${report.requests} files linked`}`}
+          rows={[
+            { label: "Speed", value: report.speed },
+            { label: "Images", value: report.images },
+            { label: "Security", value: report.security },
+            { label: "Delivery", value: report.optimization },
+            { label: "Structure", value: report.structure },
+          ]}
+        />
+      ) : null}
+      {(project.gsc?.queries || []).length ? (
+        <BarChart
+          title="Search impressions"
+          caption="From the Search Console export in this workspace."
+          unit="impressions"
+          points={[...project.gsc.queries].sort((a, b) => (b.impressions || 0) - (a.impressions || 0)).slice(0, 8).map((row) => {
+            const label = row.key || row.query || "query";
+            return { id: label, label, short: label.slice(0, 12), value: row.impressions || 0 };
+          })}
+          active={0}
+        />
+      ) : null}
       <section className="card" style={{ marginTop: 14 }}>
         <h2>Workspace settings</h2>
         <form onSubmit={(event) => { event.preventDefault(); act({ type: "settings", name, brandTerms, maxPages: Number(maxPages) }); }}>

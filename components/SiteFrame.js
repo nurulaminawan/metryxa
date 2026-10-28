@@ -7,6 +7,7 @@ export function SiteFrame({ children }) {
           <a href="/#crawl">Crawl</a>
           <a href="/#tools">Tools</a>
           <a href="/guide">Guide</a>
+          <a href="/guide#pricing">Pricing</a>
           <a className="nav-cta" href="/#crawl">Start a crawl</a>
         </nav>
       </header>
@@ -22,6 +23,7 @@ export function SiteFrame({ children }) {
             <a href="/#crawl">Crawl</a>
             <a href="/#tools">Tools</a>
             <a href="/guide">Guide</a>
+            <a href="/guide#pricing">Pricing</a>
           </div>
           <div>
             <h2>In a workspace</h2>
