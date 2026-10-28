@@ -21,12 +21,12 @@ function applyCrawl(project, crawl) {
 
 export async function POST(request, context) {
   const { id } = await context.params;
-  const project = getProject(id);
-  if (!project) return Response.json({ error: "Workspace not found" }, { status: 404 });
   try {
     const body = await request.json();
     const limited = await guardAction(request, body.type);
     if (limited) return limited;
+    const project = body.project?.id === id ? body.project : getProject(id);
+    if (!project) return Response.json({ error: "Workspace not found" }, { status: 404 });
     if (body.type === "crawl") {
       project.maxPages = Math.max(1, Math.min(20, Number(body.maxPages) || project.maxPages || 8));
       applyCrawl(project, await crawlSite(project.url, project.maxPages));

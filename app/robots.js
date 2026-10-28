@@ -1,3 +1,5 @@
+export const dynamic = "force-static";
+
 const SITE = "https://metryxa.com";
 
 export default function robots() {

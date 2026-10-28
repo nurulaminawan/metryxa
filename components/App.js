@@ -16,6 +16,9 @@ import {
   TopicsView,
   VisibilityView,
 } from "./views";
+import { buildInsights } from "../lib/insights.js";
+import { applyLocalAction, staticHost } from "../lib/local-actions.js";
+import { sampleWorkspace } from "../lib/sample-workspace.js";
 import { toolCatalog } from "../lib/toolbox.js";
 
 const NAV = [
@@ -111,20 +114,42 @@ function readLocal() {
 }
 
 function writeLocal(list) {
-  localStorage.setItem(LOCAL_KEY, JSON.stringify(list.slice(0, 20)));
+  let payload = list.slice(0, 8);
+  while (payload.length) {
+    try {
+      localStorage.setItem(LOCAL_KEY, JSON.stringify(payload));
+      return;
+    } catch {
+      payload = payload.slice(0, -1);
+    }
+  }
+  try {
+    localStorage.removeItem(LOCAL_KEY);
+  } catch {
+    /* this browser refused the write */
+  }
 }
 
 function remember(list, project) {
-  const summary = {
-    id: project.id,
-    name: project.name,
-    url: project.url,
-    host: project.host,
-    pages: Array.isArray(project.pages) ? project.pages.length : project.pages || 0,
-  };
-  const next = [summary, ...list.filter((item) => item.id !== summary.id)].slice(0, 20);
+  const next = [project, ...list.filter((item) => item.id !== project.id)].slice(0, 8);
   writeLocal(next);
   return next;
+}
+
+function pageCount(project) {
+  return Array.isArray(project?.pages) ? project.pages.length : project?.pages || 0;
+}
+
+async function mergeAi(project) {
+  try {
+    const data = await readJson(await fetch(`/api/collect?project=${encodeURIComponent(project.id)}`));
+    const seen = new Set((project.aiTraffic || []).map((row) => `${row.ts}|${row.url}`));
+    const extra = (data.events || []).filter((row) => row && !seen.has(`${row.ts}|${row.url}`));
+    if (!extra.length) return project;
+    return { ...project, aiTraffic: [...extra, ...(project.aiTraffic || [])].slice(0, 2000) };
+  } catch {
+    return project;
+  }
 }
 
 export default function App() {
@@ -140,7 +165,13 @@ export default function App() {
   const setToken = useRef((value) => setCaptchaToken(value)).current;
 
   useEffect(() => {
-    setProjects(readLocal());
+    const saved = readLocal();
+    if (staticHost && saved.length === 0) {
+      writeLocal([sampleWorkspace]);
+      setProjects([sampleWorkspace]);
+    } else {
+      setProjects(saved);
+    }
     setBooting(false);
     fetch("/api/config")
       .then((response) => readJson(response))
@@ -151,6 +182,20 @@ export default function App() {
   async function openProject(id, nextView = "overview") {
     setBusy("Opening workspace");
     setError("");
+    const saved = readLocal().find((item) => item.id === id);
+    if (Array.isArray(saved?.pages)) {
+      try {
+        const project = staticHost ? saved : await mergeAi(saved);
+        setProjects((list) => remember(list, project));
+        setCurrent({ project, insights: buildInsights(project) });
+        setView(nextView);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setBusy("");
+      }
+      return;
+    }
     try {
       const data = await readJson(await fetch(`/api/projects/${id}`));
       setProjects((list) => remember(list, data.project));
@@ -170,6 +215,10 @@ export default function App() {
 
   async function createProject(event) {
     event.preventDefault();
+    if (staticHost) {
+      setError("This GitHub Pages copy cannot fetch another website. Open the sample crawl to use the checks, charts, and drafts, or import a Search Console file.");
+      return;
+    }
     const form = new FormData(event.currentTarget);
     setBusy("Crawling the site");
     setError("");
@@ -206,12 +255,26 @@ export default function App() {
   async function act(body) {
     setBusy("Working");
     setError("");
+    if (staticHost) {
+      try {
+        const project = applyLocalAction(current.project, body);
+        const data = { project, insights: buildInsights(project) };
+        setProjects((list) => remember(list, project));
+        setCurrent(data);
+        return data;
+      } catch (err) {
+        setError(err.message);
+        return null;
+      } finally {
+        setBusy("");
+      }
+    }
     try {
       const data = await readJson(
         await fetch(`/api/projects/${current.project.id}/actions`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify(body),
+          body: JSON.stringify({ ...body, project: current.project }),
         })
       );
       setProjects((list) => remember(list, data.project));
@@ -249,6 +312,7 @@ export default function App() {
               Crawl a site, map the sitemap, and score the HTML that came back.
               Search volume and backlink counts stay out of the product.
             </p>
+            {staticHost ? <p>This copy is on GitHub Pages. The sample crawl, its checks, the report charts, drafts, and a Search Console or Analytics import run here. Fetching a new website needs the full server.</p> : null}
           </div>
           <form className="card crawl-card" onSubmit={createProject}>
             <div className="field">
@@ -297,7 +361,7 @@ export default function App() {
             {projects.map((project) => (
               <button key={project.id} className="choice" type="button" onClick={() => openProject(project.id)} disabled={Boolean(busy)}>
                 <strong>{project.name}</strong>
-                <div className="url">{project.host} · {project.pages || 0} pages</div>
+                <div className="url">{project.host} · {pageCount(project)} pages</div>
               </button>
             ))}
           </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { staticHost } from "../lib/local-actions.js";
 
 const SERVICES = ["SEO audit", "Detailed audit", "Page speed optimization"];
 
@@ -46,6 +47,7 @@ export function ContactForm() {
     <form className="card contact-form" id="contact" onSubmit={submit}>
       <h2>Contact us</h2>
       <p className="muted">Tell us the site and the engagement. The reply includes the price.</p>
+      {staticHost ? <p>This GitHub Pages copy cannot store a quote. The form works on the full Metryxa server.</p> : null}
       <div className="row">
         <div className="field">
           <label htmlFor="contact-name">Name</label>
@@ -71,7 +73,7 @@ export function ContactForm() {
         <textarea id="contact-message" name="message" required maxLength={2000} />
       </div>
       {error ? <div className="banner">{error}</div> : null}
-      <button className="btn" type="submit" disabled={status === "Sending"}>{status === "Sending" ? "Sending" : "Request a quote"}</button>
+      <button className="btn" type="submit" disabled={staticHost || status === "Sending"}>{status === "Sending" ? "Sending" : "Request a quote"}</button>
       {status && status !== "Sending" ? <p>{status}</p> : null}
     </form>
   );

@@ -1,3 +1,5 @@
+export const dynamic = "force-static";
+
 export default function sitemap() {
   const lastModified = new Date("2026-10-28");
   return [

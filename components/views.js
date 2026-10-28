@@ -5,6 +5,7 @@ import { techItems } from "../lib/intel.js";
 import { runTools } from "../lib/toolbox.js";
 import { suggestFixes } from "../lib/content.js";
 import { performanceReport } from "../lib/performance.js";
+import { renderReport } from "../lib/report.js";
 import { BarChart, MeterChart } from "./Charts";
 
 function n(value) {
@@ -716,6 +717,17 @@ export function IntelView({ project, insights, act, busy }) {
   );
 }
 
+function downloadReport(project, insights) {
+  const html = renderReport(project, insights);
+  const blob = new Blob([html], { type: "text/html" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${project.host || "metryxa"}-report.html`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 function pagePath(url) {
   try {
     const path = new URL(url).pathname || "/";
@@ -747,7 +759,7 @@ export function ReportView({ project, insights, act, busy, onDelete }) {
           <h1>Report</h1>
           <p className="muted">Hover or select a bar. Every value is the HTML that was fetched, or a Search Console figure you imported. Nothing here is a guessed lab grade.</p>
         </div>
-        <a className="btn" href={`/api/projects/${project.id}/report`}>Download HTML</a>
+        <button className="btn" type="button" onClick={() => downloadReport(project, insights)}>Download HTML</button>
       </header>
       <Scores insights={insights} />
       <div className="chart-grid">

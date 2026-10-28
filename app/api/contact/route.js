@@ -1,12 +1,9 @@
-import fs from "fs";
-import path from "path";
 import { guardWrite } from "../../../lib/guard.js";
+import { saveContact } from "../../../lib/inbox.js";
 
 export const dynamic = "force-dynamic";
 
 const SERVICES = new Set(["SEO audit", "Detailed audit", "Page speed optimization"]);
-const file = path.join(process.cwd(), "data", "contacts.json");
-
 function clean(value, max) {
   return String(value || "").replace(/\s+/g, " ").trim().slice(0, max);
 }
@@ -30,10 +27,11 @@ export async function POST(request) {
     if (!SERVICES.has(service)) {
       return Response.json({ error: "Choose an SEO audit, a detailed audit, or page speed optimization." }, { status: 400 });
     }
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    const current = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : [];
-    current.unshift({ id: crypto.randomUUID(), createdAt: new Date().toISOString(), name, email, site, service, message });
-    fs.writeFileSync(file, JSON.stringify(current.slice(0, 200)));
+    const entry = { id: crypto.randomUUID(), createdAt: new Date().toISOString(), name, email, site, service, message };
+    const stored = await saveContact(entry);
+    if (!stored) {
+      return Response.json({ error: "The quote could not be stored. Connect Redis and try again." }, { status: 503 });
+    }
     return Response.json({ ok: true });
   } catch {
     return Response.json({ error: "Could not store the request." }, { status: 400 });
