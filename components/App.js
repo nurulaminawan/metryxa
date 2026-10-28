@@ -99,6 +99,34 @@ async function readJson(response) {
   return data;
 }
 
+const LOCAL_KEY = "metryxa.workspaces";
+
+function readLocal() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(LOCAL_KEY) || "[]");
+    return Array.isArray(parsed) ? parsed.filter((item) => item?.id) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeLocal(list) {
+  localStorage.setItem(LOCAL_KEY, JSON.stringify(list.slice(0, 20)));
+}
+
+function remember(list, project) {
+  const summary = {
+    id: project.id,
+    name: project.name,
+    url: project.url,
+    host: project.host,
+    pages: Array.isArray(project.pages) ? project.pages.length : project.pages || 0,
+  };
+  const next = [summary, ...list.filter((item) => item.id !== summary.id)].slice(0, 20);
+  writeLocal(next);
+  return next;
+}
+
 export default function App() {
   const [projects, setProjects] = useState([]);
   const [current, setCurrent] = useState(null);
@@ -112,11 +140,8 @@ export default function App() {
   const setToken = useRef((value) => setCaptchaToken(value)).current;
 
   useEffect(() => {
-    fetch("/api/projects")
-      .then((response) => readJson(response))
-      .then((data) => setProjects(data.projects || []))
-      .catch((err) => setError(err.message))
-      .finally(() => setBooting(false));
+    setProjects(readLocal());
+    setBooting(false);
     fetch("/api/config")
       .then((response) => readJson(response))
       .then(setConfig)
@@ -128,9 +153,15 @@ export default function App() {
     setError("");
     try {
       const data = await readJson(await fetch(`/api/projects/${id}`));
+      setProjects((list) => remember(list, data.project));
       setCurrent(data);
       setView(nextView);
     } catch (err) {
+      setProjects((list) => {
+        const next = list.filter((item) => item.id !== id);
+        writeLocal(next);
+        return next;
+      });
       setError(err.message);
     } finally {
       setBusy("");
@@ -156,10 +187,7 @@ export default function App() {
           }),
         })
       );
-      setProjects((list) => [
-        { id: data.project.id, name: data.project.name, url: data.project.url, host: data.project.host, pages: data.project.pages.length },
-        ...list.filter((item) => item.id !== data.project.id),
-      ]);
+      setProjects((list) => remember(list, data.project));
       setCurrent(data);
       setView(focusTool ? "tools" : "overview");
     } catch (err) {
@@ -186,6 +214,7 @@ export default function App() {
           body: JSON.stringify(body),
         })
       );
+      setProjects((list) => remember(list, data.project));
       setCurrent(data);
       return data;
     } catch (err) {
@@ -200,7 +229,11 @@ export default function App() {
     if (!current) return;
     setBusy("Removing");
     await fetch(`/api/projects/${current.project.id}`, { method: "DELETE" });
-    setProjects((list) => list.filter((item) => item.id !== current.project.id));
+    setProjects((list) => {
+      const next = list.filter((item) => item.id !== current.project.id);
+      writeLocal(next);
+      return next;
+    });
     setCurrent(null);
     setBusy("");
   }
@@ -257,9 +290,9 @@ export default function App() {
           </form>
         </section>
         <section className="saved">
-          <h2>Saved workspaces</h2>
+          <h2>On this browser</h2>
           {booting ? <p className="muted">Loading…</p> : null}
-          {!booting && projects.length === 0 ? <p className="empty">None yet. The first crawl appears here.</p> : null}
+          {!booting && projects.length === 0 ? <p className="empty">None yet. A crawl stays in this browser and is not listed for anyone else.</p> : null}
           <div className="saved-row">
             {projects.map((project) => (
               <button key={project.id} className="choice" type="button" onClick={() => openProject(project.id)} disabled={Boolean(busy)}>
@@ -271,7 +304,7 @@ export default function App() {
         </section>
         <section className="tool-wrap" id="tools">
           <h2>Tools</h2>
-          <p className="muted">{toolCatalog.length} checks. Open one to run it on a saved workspace, or crawl a site first.</p>
+          <p className="muted">{toolCatalog.length} checks. Open one to run it on a crawl in this browser, or crawl a site first.</p>
           {[...new Set(toolCatalog.map((tool) => tool.group))].map((group) => (
             <div className="tool-group" key={group}>
               <h3>{group}</h3>

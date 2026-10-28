@@ -1,7 +1,7 @@
 import { crawlSite } from "../../../lib/crawl.js";
 import { guardNewCrawl, guardRead } from "../../../lib/guard.js";
 import { buildInsights } from "../../../lib/insights.js";
-import { blankProject, listProjects, saveProject } from "../../../lib/store.js";
+import { blankProject, saveProject } from "../../../lib/store.js";
 import { assertHttpUrl, hostLabel } from "../../../lib/url.js";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +10,7 @@ export const maxDuration = 60;
 export async function GET(request) {
   const limited = await guardRead(request);
   if (limited) return limited;
-  return Response.json({ projects: listProjects() });
+  return Response.json({ projects: [] });
 }
 
 export async function POST(request) {
