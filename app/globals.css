@@ -80,6 +80,8 @@ a { color: var(--blue); }
 .hero-copy p { color: rgba(255, 255, 255, 0.86); font-size: 18px; max-width: 38ch; margin: 0; }
 .eyebrow { margin: 0; font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #d5e4f2; }
 .crawl-card { box-shadow: 0 16px 40px rgba(18, 50, 77, 0.12); }
+.crawl-card h2 { font-size: 22px; margin: 0 0 8px; }
+.crawl-card a.btn { display: inline-block; text-decoration: none; margin-top: 8px; }
 .saved, .tool-wrap { padding: 28px 24px 8px; }
 .tool-wrap { padding-bottom: 72px; }
 .saved h2, .tool-wrap h2 { margin: 0 0 8px; font-size: 28px; }
@@ -140,10 +142,31 @@ button.tool-card.is-selected, .card.tool-focus { border-color: var(--navy); back
 .guide p { font-size: 17px; margin: 0 0 12px; }
 .guide a { color: var(--blue); }
 .guide .btn { color: #fff; text-decoration: none; display: inline-block; }
-.price-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 16px 0 28px; }
-.price-card { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 18px; box-shadow: var(--shadow); }
-.price-card h3 { margin: 0 0 8px; font-size: 20px; }
-.price-card p { color: var(--muted); }
+.guide #pricing {
+  width: min(1040px, calc(100vw - 48px));
+  margin-left: 50%;
+  transform: translateX(-50%);
+}
+.price-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  align-items: stretch;
+  margin: 18px 0 32px;
+}
+.price-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 20px;
+  box-shadow: var(--shadow);
+}
+.price-card h3 { margin: 0 0 8px; font-size: 18px; line-height: 1.3; }
+.price-card p { color: var(--muted); flex: 1 1 auto; margin: 0 0 18px; }
+.price-card .btn { margin-top: auto; align-self: flex-start; text-decoration: none; }
 .contact-form { margin: 8px 0 36px; }
 .chart { margin: 0 0 16px; }
 .chart figcaption { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
@@ -256,7 +279,15 @@ input:focus, select:focus, textarea:focus { border-color: var(--navy); }
   flex-direction: column;
   gap: 8px;
 }
-.side nav { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+.side nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
 .side button.navbtn {
   text-align: left;
   border: 0;
@@ -266,8 +297,16 @@ input:focus, select:focus, textarea:focus { border-color: var(--navy); }
   color: var(--ink);
 }
 .side button.navbtn.active { background: var(--navy); color: #fff; }
-.side .grow { margin-top: auto; }
-.workspace-switch { font-size: 13px; }
+.side .grow {
+  flex: 0 0 auto;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 6px;
+}
+.side .grow label { margin: 4px 0 0; }
+.workspace-switch { font-size: 13px; max-width: 100%; }
 .main { padding: 22px 26px 64px; max-width: 1180px; }
 .topbar { display: flex; justify-content: space-between; gap: 16px; align-items: flex-end; margin-bottom: 18px; }
 .topbar h1 { font-size: 28px; line-height: 1.25; margin: 0 0 6px; font-weight: 700; }
@@ -366,20 +405,19 @@ th, td { padding: 8px 8px 8px 0; border-bottom: 1px solid var(--line); vertical-
   .shell { grid-template-columns: 1fr; }
   .side {
     position: sticky;
-    top: 0;
+    top: 64px;
     height: auto;
     z-index: 2;
     border-right: 0;
     border-bottom: 1px solid var(--line);
   }
-  .side { top: 64px; }
-  .side nav { flex-direction: row; overflow: auto; margin-top: 0; }
+  .side nav { flex: none; flex-direction: row; overflow: auto; margin-top: 0; }
   .site-nav { padding: 0 16px; }
   .site-links { gap: 14px; }
   .nav-cta { display: none; }
   .footer-grid { grid-template-columns: 1fr; }
   .side button.navbtn { white-space: nowrap; }
-  .side .grow { display: block; margin-top: 8px; }
+  .side .grow { display: grid; margin-top: 8px; padding-top: 0; border-top: 0; }
   .grid-2, .layout, .split, .scores, .pillars, .hero, .tool-grid, .price-grid, .chart-grid { grid-template-columns: 1fr; }
   .hero-copy { min-height: 0; }
   .saved-row .choice { width: 100%; }

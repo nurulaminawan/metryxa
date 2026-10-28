@@ -22,6 +22,8 @@ const structuredData = {
   })),
 };
 
+const pagesCopy = process.env.NEXT_PUBLIC_STATIC_HOST === "1";
+
 export default function GuidePage() {
   return (
     <main className="guide">
@@ -75,7 +77,7 @@ export default function GuidePage() {
           <p>{item.answer}</p>
         </section>
       ))}
-      <p><a href="/">Crawl a site</a></p>
+      <p><a href={pagesCopy ? "/#tools" : "/"}>{pagesCopy ? "Open the checks" : "Crawl a site"}</a></p>
     </main>
   );
 }

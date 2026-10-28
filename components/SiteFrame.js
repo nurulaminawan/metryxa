@@ -1,14 +1,16 @@
+const pagesCopy = process.env.NEXT_PUBLIC_STATIC_HOST === "1";
+
 export function SiteFrame({ children }) {
   return (
     <>
       <header className="site-nav">
         <a className="brand-mark" href="/"><span className="mark" /> Metryxa</a>
         <nav className="site-links" aria-label="Primary">
-          <a href="/#crawl">Crawl</a>
+          <a href={pagesCopy ? "/#tools" : "/#crawl"}>{pagesCopy ? "Checks" : "Crawl"}</a>
           <a href="/#tools">Tools</a>
           <a href="/guide">Guide</a>
           <a href="/guide#pricing">Pricing</a>
-          <a className="nav-cta" href="/#crawl">Start a crawl</a>
+          {pagesCopy ? null : <a className="nav-cta" href="/#crawl">Start a crawl</a>}
         </nav>
       </header>
       {children}
@@ -20,7 +22,7 @@ export function SiteFrame({ children }) {
           </div>
           <div>
             <h2>Product</h2>
-            <a href="/#crawl">Crawl</a>
+            <a href={pagesCopy ? "/#tools" : "/#crawl"}>{pagesCopy ? "Checks" : "Crawl"}</a>
             <a href="/#tools">Tools</a>
             <a href="/guide">Guide</a>
             <a href="/guide#pricing">Pricing</a>

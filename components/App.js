@@ -312,8 +312,15 @@ export default function App() {
               Crawl a site, map the sitemap, and score the HTML that came back.
               Search volume and backlink counts stay out of the product.
             </p>
-            {staticHost ? <p>This copy is on GitHub Pages. The sample crawl, its checks, the report charts, drafts, and a Search Console or Analytics import run here. Fetching a new website needs the full server.</p> : null}
+            {staticHost ? <p>Open the sample crawl and run a check. Fetching a new website is turned off on this site.</p> : null}
           </div>
+          {staticHost ? (
+            <div className="card crawl-card">
+              <h2>Checks are open</h2>
+              <p>A new crawl is turned off here. The sample workspace is already on this browser. Open it, then pick a check from the list at the bottom of the sidebar.</p>
+              <a className="btn" href="#saved">Open the sample</a>
+            </div>
+          ) : (
           <form className="card crawl-card" onSubmit={createProject}>
             <div className="field">
               <label htmlFor="url">Website</label>
@@ -352,8 +359,9 @@ export default function App() {
             </p>
             {busy ? <p className="muted">Fetching HTML, robots.txt, and the sitemap. A larger crawl can take a minute.</p> : null}
           </form>
+          )}
         </section>
-        <section className="saved">
+        <section className="saved" id="saved">
           <h2>On this browser</h2>
           {booting ? <p className="muted">Loading…</p> : null}
           {!booting && projects.length === 0 ? <p className="empty">None yet. A crawl stays in this browser and is not listed for anyone else.</p> : null}
@@ -368,7 +376,7 @@ export default function App() {
         </section>
         <section className="tool-wrap" id="tools">
           <h2>Tools</h2>
-          <p className="muted">{toolCatalog.length} checks. Open one to run it on a crawl in this browser, or crawl a site first.</p>
+          <p className="muted">{toolCatalog.length} checks. Open one to run it on a crawl in this browser{staticHost ? "." : ", or crawl a site first."}</p>
           {[...new Set(toolCatalog.map((tool) => tool.group))].map((group) => (
             <div className="tool-group" key={group}>
               <h3>{group}</h3>
@@ -415,6 +423,27 @@ export default function App() {
           ))}
         </nav>
         <div className="grow">
+          <label htmlFor="check">Check</label>
+          <select
+            id="check"
+            className="workspace-switch"
+            value={focusTool}
+            onChange={(event) => {
+              const id = event.target.value;
+              if (!id) return;
+              setFocusTool(id);
+              setView("tools");
+            }}
+          >
+            <option value="">Choose a check</option>
+            {[...new Set(toolCatalog.map((tool) => tool.group))].map((group) => (
+              <optgroup key={group} label={group}>
+                {toolCatalog.filter((tool) => tool.group === group).map((tool) => (
+                  <option key={tool.id} value={tool.id}>{tool.name}</option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
           <label htmlFor="switch">Workspace</label>
           <select
             id="switch"
@@ -428,7 +457,7 @@ export default function App() {
             {projects.map((project) => (
               <option key={project.id} value={project.id}>{project.name}</option>
             ))}
-            <option value="__new">New crawl…</option>
+            {staticHost ? null : <option value="__new">New crawl…</option>}
           </select>
         </div>
       </aside>
