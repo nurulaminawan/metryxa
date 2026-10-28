@@ -11,13 +11,16 @@ import {
   Overview,
   RankingsView,
   ReportView,
+  ToolsView,
   UrlMapView,
   TopicsView,
   VisibilityView,
 } from "./views";
+import { toolCatalog } from "../lib/toolbox.js";
 
 const NAV = [
   ["overview", "Overview"],
+  ["tools", "Tools"],
   ["audit", "Audit"],
   ["urlmap", "URL map"],
   ["keywords", "Keywords"],
@@ -105,6 +108,7 @@ export default function App() {
   const [booting, setBooting] = useState(true);
   const [config, setConfig] = useState(null);
   const [captchaToken, setCaptchaToken] = useState("");
+  const [focusTool, setFocusTool] = useState("");
   const setToken = useRef((value) => setCaptchaToken(value)).current;
 
   useEffect(() => {
@@ -119,13 +123,13 @@ export default function App() {
       .catch(() => setConfig({ captcha: { enabled: false }, limits: { crawl: { limit: 8, windowMinutes: 10 } } }));
   }, []);
 
-  async function openProject(id) {
+  async function openProject(id, nextView = "overview") {
     setBusy("Opening workspace");
     setError("");
     try {
       const data = await readJson(await fetch(`/api/projects/${id}`));
       setCurrent(data);
-      setView("overview");
+      setView(nextView);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -157,12 +161,18 @@ export default function App() {
         ...list.filter((item) => item.id !== data.project.id),
       ]);
       setCurrent(data);
-      setView("overview");
+      setView(focusTool ? "tools" : "overview");
     } catch (err) {
       setError(err.message);
     } finally {
       setBusy("");
     }
+  }
+
+  function openTool(id) {
+    setFocusTool(id);
+    if (projects[0]) openProject(projects[0].id, "tools");
+    else document.getElementById("url")?.focus();
   }
 
   async function act(body) {
@@ -197,16 +207,17 @@ export default function App() {
 
   if (!current) {
     return (
-      <main className="launcher">
-        <div className="brand-mark"><span className="mark" /> Metryxa</div>
-        <h1 className="lede">See the gaps. Ship the page that gets cited.</h1>
-        <p className="sub">
-          Metryxa crawls your site, reads a Search Console export, and compares live competitor pages.
-          Scores, keyword gaps, and drafts come from that evidence — search volume and backlink counts are not invented.
-        </p>
-        <p className="sub"><a href="/guide">What the free SEO, AEO, and GEO checks cover</a></p>
-        <div className="grid-2">
-          <form className="card" onSubmit={createProject}>
+      <main className="home">
+        <section className="hero" id="crawl">
+          <div className="hero-copy">
+            <p className="eyebrow">SEO, AEO, and GEO workspace</p>
+            <h1>See the gaps. Ship the page that gets cited.</h1>
+            <p>
+              Crawl a site, map the sitemap, and score the HTML that came back.
+              Search volume and backlink counts stay out of the product.
+            </p>
+          </div>
+          <form className="card crawl-card" onSubmit={createProject}>
             <div className="field">
               <label htmlFor="url">Website</label>
               <input id="url" name="url" type="url" required placeholder="https://example.com" />
@@ -244,28 +255,37 @@ export default function App() {
             </p>
             {busy ? <p className="muted">Fetching HTML, robots.txt, and the sitemap. A larger crawl can take a minute.</p> : null}
           </form>
-          <aside className="card">
-            <h2>What you can do in this workspace</h2>
-            <ul className="points">
-              <li><strong>Audit</strong><span>Titles, indexation, schema, speed of the HTML, and the exact fix.</span></li>
-              <li><strong>Keywords from the crawl and Search Console</strong><span>Striking distance, weak snippets, and queries two of your pages compete for.</span></li>
-              <li><strong>Competitor gaps</strong><span>Headings and sources they cite that your crawl does not.</span></li>
-              <li><strong>AI answer coverage</strong><span>Fan a prompt into the questions answer engines ask, then see which page of yours covers each one.</span></li>
-              <li><strong>Draft the fix</strong><span>BLUF, comparison table, FAQ, and schema from the gaps that were actually found.</span></li>
-            </ul>
-            <h2>Saved workspaces</h2>
-            {booting ? <p className="muted">Loading…</p> : null}
-            {!booting && projects.length === 0 ? <p className="empty">None yet.</p> : null}
-            <div className="stack">
-              {projects.map((project) => (
-                <button key={project.id} className="choice" type="button" onClick={() => openProject(project.id)} disabled={Boolean(busy)}>
-                  <strong>{project.name}</strong>
-                  <div className="url">{project.host} · {project.pages || 0} pages</div>
-                </button>
-              ))}
+        </section>
+        <section className="saved">
+          <h2>Saved workspaces</h2>
+          {booting ? <p className="muted">Loading…</p> : null}
+          {!booting && projects.length === 0 ? <p className="empty">None yet. The first crawl appears here.</p> : null}
+          <div className="saved-row">
+            {projects.map((project) => (
+              <button key={project.id} className="choice" type="button" onClick={() => openProject(project.id)} disabled={Boolean(busy)}>
+                <strong>{project.name}</strong>
+                <div className="url">{project.host} · {project.pages || 0} pages</div>
+              </button>
+            ))}
+          </div>
+        </section>
+        <section className="tool-wrap" id="tools">
+          <h2>Tools</h2>
+          <p className="muted">{toolCatalog.length} checks. Open one to run it on a saved workspace, or crawl a site first.</p>
+          {[...new Set(toolCatalog.map((tool) => tool.group))].map((group) => (
+            <div className="tool-group" key={group}>
+              <h3>{group}</h3>
+              <div className="tool-grid">
+                {toolCatalog.filter((tool) => tool.group === group).map((tool) => (
+                  <button className="tool-card" type="button" key={tool.id} onClick={() => openTool(tool.id)}>
+                    <strong>{tool.name}</strong>
+                    <span>{tool.detail}</span>
+                  </button>
+                ))}
+              </div>
             </div>
-          </aside>
-        </div>
+          ))}
+        </section>
       </main>
     );
   }
@@ -273,6 +293,7 @@ export default function App() {
   const viewProps = { project: current.project, insights: current.insights, act, busy };
   const screens = {
     overview: <Overview {...viewProps} />,
+    tools: <ToolsView {...viewProps} focus={focusTool} onSelect={setFocusTool} />,
     audit: <AuditView {...viewProps} />,
     urlmap: <UrlMapView {...viewProps} />,
     keywords: <KeywordsView {...viewProps} />,
@@ -289,7 +310,6 @@ export default function App() {
   return (
     <div className="shell">
       <aside className="side">
-        <div className="brand-mark" style={{ fontSize: 22 }}><span className="mark" /> Metryxa</div>
         <nav>
           {NAV.map(([id, label]) => (
             <button key={id} className={`navbtn ${view === id ? "active" : ""}`} type="button" onClick={() => setView(id)}>

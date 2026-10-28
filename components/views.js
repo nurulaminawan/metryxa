@@ -1,6 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { techItems } from "../lib/intel.js";
+import { runTools } from "../lib/toolbox.js";
 import { suggestFixes } from "../lib/content.js";
 import { performanceReport } from "../lib/performance.js";
 
@@ -82,9 +84,20 @@ export function Overview({ project, insights, act, busy }) {
             ))}
             {insights.keywords.length === 0 ? <p className="empty">The crawl did not yield keyword phrases yet.</p> : null}
           </article>
+          <article className="card">
+            <h2>Measured traffic</h2>
+            <p className="muted">Search clicks, Analytics views, and AI referrals stored in this workspace. A crawl cannot see total site visits, so no visit estimate is filled in.</p>
+            <div className="kpis">
+              <div><b>{n(insights.gsc.clicks)}</b><span className="muted">Search clicks</span></div>
+              <div><b>{n(insights.urlMap?.counts?.views)}</b><span className="muted">Analytics views</span></div>
+              <div><b>{n(insights.aiTraffic?.total)}</b><span className="muted">AI referrals</span></div>
+            </div>
+            {(insights.aiTraffic?.sources || []).map((row) => <p key={row.source}>{row.source}: {n(row.count)}</p>)}
+            {!insights.gsc?.queries && !insights.urlMap?.counts?.views && !insights.aiTraffic?.total ? <p className="muted">Import a Search Console or Analytics export, or install the referral snippet, to fill these in.</p> : null}
+          </article>
           {insights.intelBrief ? (
             <article className="card">
-              <h2>Free-source intel</h2>
+              <h2>Public intel</h2>
               <p className="muted">{insights.intelBrief.suggestions} autosuggest ideas, {insights.intelBrief.uncovered} not covered by the crawl. {insights.intelBrief.subdomains} host names in public certificates. {insights.intelBrief.llms ? "llms.txt is published." : "No llms.txt."}</p>
               {insights.intelBrief.blocked.length ? <p>Blocked AI crawlers: {insights.intelBrief.blocked.join(", ")}</p> : null}
               {insights.intelBrief.tech.length ? <p className="muted">{insights.intelBrief.tech.join(" · ")}</p> : null}
@@ -643,8 +656,11 @@ export function IntelView({ project, insights, act, busy }) {
       {!intel ? <p className="empty">Nothing gathered yet.</p> : (
         <div className="stack" style={{ marginTop: 14 }}>
           <section className="card">
-            <h2>How the site is built</h2>
-            <p>{intel.tech?.length ? intel.tech.join(" · ") : "No recognizable platform or tag manager in the homepage HTML."}</p>
+            <h2>Technology</h2>
+            <p className="muted">Recognized from the homepage HTML and response headers.</p>
+            {techItems(intel.tech).length ? [...new Set(techItems(intel.tech).map((item) => item.category))].map((category) => (
+              <p key={category}><strong>{category}.</strong> {techItems(intel.tech).filter((item) => item.category === category).map((item) => item.name).join(", ")}</p>
+            )) : <p>No recognizable platform, analytics tag, or host in the homepage HTML.</p>}
             <p className="muted">{intel.adsTxt ? "ads.txt is published." : "No ads.txt."} {intel.llms?.found ? "llms.txt is published for answer engines." : "No llms.txt, so answer engines have no curated file of what to cite."}</p>
             {intel.llms?.found ? <pre className="snippet">{intel.llms.preview}</pre> : null}
           </section>
@@ -731,6 +747,76 @@ export function ReportView({ project, insights, act, busy, onDelete }) {
           </div>
         </form>
       </section>
+    </>
+  );
+}
+
+export function ToolsView({ project, insights, focus, onSelect }) {
+  const results = useMemo(() => runTools(project, insights), [project, insights]);
+  const selected = results.find((tool) => tool.id === focus) || null;
+  const groups = [...new Set(results.map((tool) => tool.group))];
+  useEffect(() => {
+    if (!selected) return undefined;
+    let cancelled = false;
+    const align = () => {
+      if (cancelled) return;
+      const node = document.getElementById("tool-focus");
+      if (!node) return;
+      const nav = document.querySelector(".site-nav")?.getBoundingClientRect().height || 0;
+      const stacked = window.matchMedia("(max-width: 960px)").matches;
+      const side = stacked ? document.querySelector(".side")?.getBoundingClientRect().height || 0 : 0;
+      const top = node.getBoundingClientRect().top + window.scrollY - nav - side - 12;
+      window.scrollTo({ top: Math.max(0, top) });
+    };
+    const frame = requestAnimationFrame(align);
+    const timer = setTimeout(align, 80);
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(frame);
+      clearTimeout(timer);
+    };
+  }, [selected, project?.id]);
+  return (
+    <>
+      <header className="topbar">
+        <div>
+          <h1>{selected ? selected.name : "Tools"}</h1>
+          <p className="muted">
+            {selected ? selected.detail : `${results.length} checks on the pages stored in this workspace.`}
+          </p>
+        </div>
+      </header>
+      {selected ? (
+        <article className="card tool-focus" id="tool-focus">
+          <p className="eyebrow">{selected.group}</p>
+          <h2>{selected.name}</h2>
+          <p>{selected.summary}</p>
+          {selected.rows.length ? (
+            <ul className="tool-rows">{selected.rows.map((row) => <li key={row}>{row}</li>)}</ul>
+          ) : (
+            <p className="muted">This check has no row-level results in the saved crawl.</p>
+          )}
+        </article>
+      ) : null}
+      {groups.map((group) => (
+        <section key={group}>
+          <h2>{group}</h2>
+          <div className="tool-grid">
+            {results.filter((tool) => tool.group === group).map((tool) => (
+              <button
+                className={`tool-card ${tool.id === focus ? "is-selected" : ""}`}
+                id={`tool-${tool.id}`}
+                key={tool.id}
+                type="button"
+                onClick={() => onSelect?.(tool.id)}
+              >
+                <strong>{tool.name}</strong>
+                <p>{tool.summary}</p>
+              </button>
+            ))}
+          </div>
+        </section>
+      ))}
     </>
   );
 }

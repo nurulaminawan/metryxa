@@ -25,7 +25,6 @@ export default function GuidePage() {
   return (
     <main className="guide">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }} />
-      <a className="brand-mark" href="/"><span className="mark" /> Metryxa</a>
       <h1>Free SEO, AEO, and GEO checks from a real crawl</h1>
       <p className="sub">
         Metryxa fetches your pages and scores what came back. Use it when you want a free on-page SEO audit,

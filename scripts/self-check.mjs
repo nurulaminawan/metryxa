@@ -6,6 +6,7 @@ import { parsePage } from "../lib/parse-page.js";
 import { performanceReport } from "../lib/performance.js";
 import { scorePage } from "../lib/score.js";
 import { crawlSite } from "../lib/crawl.js";
+import { runTools } from "../lib/toolbox.js";
 import { closeRedis } from "../lib/redis.js";
 import { enforceRateLimit, reserveWindow, slidingWindow } from "../lib/rate-limit.js";
 import { detectTech, parseAiCrawlers, parseSuggest } from "../lib/intel.js";
@@ -80,8 +81,12 @@ if (!ideas.includes("best crm")) throw new Error("Autosuggest parse failed");
 const bots = parseAiCrawlers("User-agent: GPTBot\nDisallow: /\n\nUser-agent: *\nAllow: /\n");
 if (bots.find((bot) => bot.bot === "GPTBot").access !== "blocked") throw new Error("GPTBot should be blocked");
 if (bots.find((bot) => bot.bot === "PerplexityBot").access !== "allowed") throw new Error("Unnamed bots follow the open wildcard");
-const tech = detectTech('<script src="https://cdn.shopify.com/shop.js"></script>', { server: "cloudflare", cf: true });
-if (!tech.includes("Shopify") || !tech.includes("Cloudflare")) throw new Error(`Tech detect failed: ${tech.join(", ")}`);
+const tech = detectTech('<script src="https://cdn.shopify.com/shop.js"></script><script src="https://www.googletagmanager.com/gtm.js"></script>', { server: "cloudflare", cf: true });
+const techNames = tech.map((item) => item.name);
+if (!techNames.includes("Shopify") || !techNames.includes("Cloudflare") || !techNames.includes("Google Tag Manager")) {
+  throw new Error(`Tech detect failed: ${techNames.join(", ")}`);
+}
+if (tech.find((item) => item.name === "Shopify").category !== "Ecommerce") throw new Error("Shopify should be categorized as ecommerce");
 
 const ga = parseGaCsv("Page path and screen class,Views,Users\n/blog/water,50,10\n");
 if (ga[0].views !== 50 || ga[0].key !== "/blog/water") throw new Error("Analytics CSV parse failed");
@@ -130,6 +135,11 @@ if (redisFirst.store === "redis") {
   const redisSecond = await reserveWindow(redisKey, 1, 30_000);
   if (redisSecond.ok || redisSecond.store !== "redis") throw new Error(`Redis window failed: ${JSON.stringify(redisSecond)}`);
 }
+
+const toolRun = runTools({ pages: [page] }, { keywords: [], striking: [], gsc: { clicks: 0, impressions: 0 }, urlMap: { counts: { sitemap: 0, audited: 1, sitemapOnly: 0, views: 0 }, folders: [] } });
+const titleTool = toolRun.find((tool) => tool.id === "titles");
+if (!titleTool.summary.includes("1 of 1")) throw new Error(`Title tool failed: ${titleTool.summary}`);
+if (toolRun.length < 40) throw new Error(`Expected more tools, got ${toolRun.length}`);
 
 const live = await crawlSite("https://example.com", 2);
 if (!live.pages.length) throw new Error("Live crawl returned no pages");

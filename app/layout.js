@@ -1,3 +1,4 @@
+import { SiteFrame } from "../components/SiteFrame";
 import "./globals.css";
 
 const description =
@@ -83,7 +84,7 @@ export default function RootLayout({ children }) {
         <meta name="theme-color" content="#12324d" />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }} />
       </head>
-      <body>{children}</body>
+      <body><SiteFrame>{children}</SiteFrame></body>
     </html>
   );
 }
