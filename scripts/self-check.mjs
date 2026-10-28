@@ -4,6 +4,7 @@ import { buildInsights } from "../lib/insights.js";
 import { parsePage } from "../lib/parse-page.js";
 import { scorePage } from "../lib/score.js";
 import { crawlSite } from "../lib/crawl.js";
+import { detectTech, parseAiCrawlers, parseSuggest } from "../lib/intel.js";
 
 const html = `<!doctype html><html lang="en"><head>
 <title>How to prune tomatoes for more fruit</title>
@@ -67,6 +68,14 @@ if (!insights.striking.length) throw new Error("Striking distance missed positio
 if (!insights.prompts[0].variations.length) throw new Error("Fan-out failed");
 const draft = buildDraft({ keyword: "how to prune tomatoes", page, gaps: ["What is a sucker?"], sources: ["wikipedia.org"], related: [] });
 if (!draft.markdown.includes("Answer first")) throw new Error("Draft missing BLUF");
+
+const ideas = parseSuggest('["crm",["best crm","crm software"]]');
+if (!ideas.includes("best crm")) throw new Error("Autosuggest parse failed");
+const bots = parseAiCrawlers("User-agent: GPTBot\nDisallow: /\n\nUser-agent: *\nAllow: /\n");
+if (bots.find((bot) => bot.bot === "GPTBot").access !== "blocked") throw new Error("GPTBot should be blocked");
+if (bots.find((bot) => bot.bot === "PerplexityBot").access !== "allowed") throw new Error("Unnamed bots follow the open wildcard");
+const tech = detectTech('<script src="https://cdn.shopify.com/shop.js"></script>', { server: "cloudflare", cf: true });
+if (!tech.includes("Shopify") || !tech.includes("Cloudflare")) throw new Error(`Tech detect failed: ${tech.join(", ")}`);
 
 const live = await crawlSite("https://example.com", 2);
 if (!live.pages.length) throw new Error("Live crawl returned no pages");

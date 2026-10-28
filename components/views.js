@@ -80,6 +80,14 @@ export function Overview({ project, insights, act, busy }) {
             ))}
             {insights.keywords.length === 0 ? <p className="empty">The crawl did not yield keyword phrases yet.</p> : null}
           </article>
+          {insights.intelBrief ? (
+            <article className="card">
+              <h2>Free-source intel</h2>
+              <p className="muted">{insights.intelBrief.suggestions} autosuggest ideas, {insights.intelBrief.uncovered} not covered by the crawl. {insights.intelBrief.subdomains} host names in public certificates. {insights.intelBrief.llms ? "llms.txt is published." : "No llms.txt."}</p>
+              {insights.intelBrief.blocked.length ? <p>Blocked AI crawlers: {insights.intelBrief.blocked.join(", ")}</p> : null}
+              {insights.intelBrief.tech.length ? <p className="muted">{insights.intelBrief.tech.join(" · ")}</p> : null}
+            </article>
+          ) : null}
           <article className="card">
             <h2>How this score is built</h2>
             <p className="muted">SEO blends on-page tags, technical checks, and content depth. GEO looks for an answer-first paragraph, question headings, lists, tables, schema, and citations. Nothing here is a guessed search volume.</p>
@@ -157,7 +165,7 @@ export function KeywordsView({ insights }) {
           <tbody>
             {rows.map((row) => (
               <tr key={row.phrase}>
-                <td>{row.phrase}</td>
+                <td>{row.phrase}{row.sources?.length ? <div className="muted">{row.sources.join(" · ")}</div> : null}</td>
                 <td><span className="tag">{row.intent}</span></td>
                 <td>{row.yourPages}</td>
                 <td>{row.theirPages}</td>
@@ -483,6 +491,97 @@ export function ContentView({ project, act, busy }) {
           </article>
         ) : <p className="empty">Generate a draft to preview it.</p>}
       </div>
+    </>
+  );
+}
+
+export function IntelView({ project, insights, act, busy }) {
+  const intel = project.intel;
+  const [seed, setSeed] = useState(intel?.seed || project.brandTerms?.[0] || project.host || "");
+  const [psiKey, setPsiKey] = useState(project.psiKey || "");
+  const uncovered = (intel?.suggestions || []).filter((idea) => {
+    const row = insights.keywords.find((keyword) => keyword.phrase.toLowerCase() === idea.text.toLowerCase());
+    return !row || row.yourPages === 0;
+  });
+  return (
+    <>
+      <header className="topbar">
+        <div>
+          <h1>Intel</h1>
+          <p className="muted">Live keyword ideas from Google, Bing, DuckDuckGo, and YouTube autosuggest, plus Wikipedia, the Wayback Machine, public certificates, robots.txt AI crawlers, and llms.txt. This is the free public layer SEO tools use before a paid volume database.</p>
+        </div>
+      </header>
+      <form className="card" onSubmit={(event) => { event.preventDefault(); act({ type: "intel", seed, psiKey }); }}>
+        <div className="row">
+          <div className="field">
+            <label htmlFor="seed">Topic or brand</label>
+            <input id="seed" type="text" value={seed} onChange={(event) => setSeed(event.target.value)} required />
+          </div>
+          <div className="field">
+            <label htmlFor="psi">PageSpeed API key</label>
+            <input id="psi" type="password" value={psiKey} onChange={(event) => setPsiKey(event.target.value)} placeholder="Optional, free from Google Cloud" autoComplete="off" />
+          </div>
+        </div>
+        <button className="btn" type="submit" disabled={Boolean(busy)}>{busy ? "Gathering public sources" : "Run intel"}</button>
+        {busy ? <p className="muted">Autosuggest, Wikipedia, Wayback, and certificate logs usually finish within half a minute.</p> : null}
+      </form>
+      {!intel ? <p className="empty">Nothing gathered yet.</p> : (
+        <div className="stack" style={{ marginTop: 14 }}>
+          <section className="card">
+            <h2>How the site is built</h2>
+            <p>{intel.tech?.length ? intel.tech.join(" · ") : "No recognizable platform or tag manager in the homepage HTML."}</p>
+            <p className="muted">{intel.adsTxt ? "ads.txt is published." : "No ads.txt."} {intel.llms?.found ? "llms.txt is published for answer engines." : "No llms.txt, so answer engines have no curated file of what to cite."}</p>
+            {intel.llms?.found ? <pre className="snippet">{intel.llms.preview}</pre> : null}
+          </section>
+          <section className="card">
+            <h2>AI crawler access</h2>
+            <p className="muted">{intel.robotsFound ? "Read from robots.txt." : "robots.txt did not return a file, so access is unknown."}</p>
+            <table>
+              <tbody>
+                {(intel.crawlers || []).map((bot) => (
+                  <tr key={bot.bot}>
+                    <td>{bot.name}</td>
+                    <td className="muted">{bot.bot}</td>
+                    <td><span className={`tag ${bot.access === "blocked" ? "critical" : bot.access === "partial" ? "warning" : "opportunity"}`}>{bot.access}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+          <section className="card">
+            <h2>Autosuggest you do not cover</h2>
+            {uncovered.slice(0, 12).map((idea) => (
+              <div className="issue" key={idea.text}>
+                <strong>{idea.text}</strong>
+                <div className="muted">{idea.sources.join(" · ")}</div>
+                <button className="btn ghost" type="button" disabled={Boolean(busy)} onClick={() => act({ type: "draft", keyword: idea.text })}>Draft this</button>
+              </div>
+            ))}
+            {uncovered.length === 0 ? <p className="empty">Every returned suggestion already matches a crawled page, or the run returned none.</p> : null}
+          </section>
+          <div className="layout">
+            <section className="card">
+              <h2>Wikipedia entity</h2>
+              {intel.wiki?.found ? (
+                <>
+                  <h3>{intel.wiki.title}</h3>
+                  <p className="muted">{intel.wiki.description}</p>
+                  <p>{intel.wiki.extract}</p>
+                  {intel.wiki.url ? <a href={intel.wiki.url} target="_blank" rel="noreferrer">{intel.wiki.url}</a> : null}
+                </>
+              ) : <p className="empty">No English Wikipedia page for this topic. Answer engines have less of an entity to attach your brand to.</p>}
+            </section>
+            <section className="card">
+              <h2>Footprint</h2>
+              <p className="muted">{intel.wayback?.oldest ? `Oldest Wayback snapshot ${intel.wayback.oldest}.` : "No Wayback rows."} {(intel.subdomains || []).length} host names in certificate transparency.{intel.subdomainError ? ` Certificate log: ${intel.subdomainError}.` : ""}</p>
+              {(intel.subdomains || []).slice(0, 12).map((name) => <div className="url" key={name}>{name}</div>)}
+              {intel.psi?.performance != null ? <p>PageSpeed mobile {intel.psi.performance} · SEO {intel.psi.seo ?? "—"} · LCP {intel.psi.lcp} · CLS {intel.psi.cls}</p> : null}
+              {intel.psi?.skipped ? <p className="muted">{intel.psi.reason}</p> : null}
+              {intel.psi?.error ? <p className="muted">{intel.psi.error}</p> : null}
+            </section>
+          </div>
+        </div>
+      )}
     </>
   );
 }

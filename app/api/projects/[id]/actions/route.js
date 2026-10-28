@@ -1,4 +1,5 @@
 import { buildDraft } from "../../../../../lib/content.js";
+import { runIntel } from "../../../../../lib/intel.js";
 import { crawlSite } from "../../../../../lib/crawl.js";
 import { parseGscCsv } from "../../../../../lib/gsc.js";
 import { buildInsights } from "../../../../../lib/insights.js";
@@ -87,6 +88,19 @@ export async function POST(request, context) {
       project.drafts = [draft, ...(project.drafts || [])].slice(0, 25);
     } else if (body.type === "removeDraft") {
       project.drafts = (project.drafts || []).filter((item) => item.id !== body.draftId);
+    } else if (body.type === "intel") {
+      const seed = String(body.seed || project.brandTerms?.[0] || project.host || "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 80);
+      if (seed.length < 2) throw new Error("Enter a topic or brand to research.");
+      if (body.psiKey != null && String(body.psiKey).trim()) project.psiKey = String(body.psiKey).trim().slice(0, 120);
+      project.intel = await runIntel({
+        host: project.host,
+        origin: project.url,
+        seed,
+        psiKey: project.psiKey || process.env.PSI_API_KEY || "",
+      });
     } else if (body.type === "settings") {
       if (body.name) project.name = String(body.name).slice(0, 80);
       if (body.brandTerms != null) {
