@@ -1,3 +1,4 @@
+import { guardBeacon } from "../../../lib/guard.js";
 import { classifyAiSource } from "../../../lib/insights.js";
 import { getProject, saveProject } from "../../../lib/store.js";
 
@@ -14,6 +15,8 @@ export function OPTIONS() {
 }
 
 export async function POST(request) {
+  const limited = await guardBeacon(request, cors);
+  if (limited) return limited;
   try {
     const raw = await request.text();
     const body = JSON.parse(raw || "{}");

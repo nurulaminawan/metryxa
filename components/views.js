@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { suggestFixes } from "../lib/content.js";
+import { performanceReport } from "../lib/performance.js";
 
 function n(value) {
   return new Intl.NumberFormat("en").format(value || 0);
@@ -63,6 +64,7 @@ export function Overview({ project, insights, act, busy }) {
         <div><b>{n(insights.gsc.clicks)}</b><span className="muted">Search Console clicks</span></div>
         <div><b>{n(insights.gsc.impressions)}</b><span className="muted">impressions</span></div>
         <div><b>{insights.promptCoverage}%</b><span className="muted">prompt coverage</span></div>
+        <div><b>{n(insights.urlMap?.counts?.urls)}</b><span className="muted">URLs mapped</span></div>
       </div>
       <div className="layout">
         <section className="card">
@@ -124,12 +126,38 @@ export function AuditView({ project }) {
             <div><b>{n(page.wordCount)}</b><span className="muted">words</span></div>
             <div><b>{page.ms || 0}ms</b><span className="muted">HTML time</span></div>
           </div>
+          <PerformancePanel page={page} />
           <p>{page.metaDescription || "No meta description."}</p>
           <p className="muted">H1: {(page.h1 || []).join(" · ") || "none"} · schema: {(page.schemaTypes || []).join(", ") || "none"} · images missing alt: {page.images?.missingAlt || 0}/{page.images?.total || 0}</p>
           <IssueList issues={page.scores?.issues || []} />
         </article>
       </div>
     </>
+  );
+}
+
+function PerformancePanel({ page }) {
+  const report = performanceReport(page);
+  const cards = [
+    ["Document time", `${report.ms} ms`],
+    ["HTML size", `${report.kb} KB`],
+    ["Files linked", report.requests == null ? "—" : String(report.requests)],
+    ["Image score", `${report.images}`],
+    ["Security", `${report.security}`],
+    ["Compression", report.encoding],
+  ];
+  return (
+    <section>
+      <h2>Measured performance</h2>
+      <p className="muted">These figures come from the HTML response and the files it links. This is not a GTmetrix filmstrip and not a guessed grade. Browser Core Web Vitals still need a PageSpeed Insights key in Intel.</p>
+      <div className="kpis">
+        {cards.map(([label, value]) => (
+          <div key={label}><b>{value}</b><span className="muted">{label}</span></div>
+        ))}
+      </div>
+      <p className="muted">Structure score {report.structure}. Cache-Control: {report.cache}</p>
+      {report.notes.map((note) => <div className="issue" key={note}>{note}</div>)}
+    </section>
   );
 }
 
@@ -490,6 +518,93 @@ export function ContentView({ project, act, busy }) {
             <pre className="draft">{draft.markdown}</pre>
           </article>
         ) : <p className="empty">Generate a draft to preview it.</p>}
+      </div>
+    </>
+  );
+}
+
+export function UrlMapView({ project, insights, act, busy }) {
+  const map = insights.urlMap || { urls: [], folders: [], counts: {} };
+  const [section, setSection] = useState("");
+  const [q, setQ] = useState("");
+  const [gaps, setGaps] = useState(false);
+  const [pasted, setPasted] = useState("");
+  const rows = map.urls.filter((url) => {
+    if (section && url.section !== section) return false;
+    if (gaps && url.audited) return false;
+    if (q && !`${url.url} ${url.title}`.toLowerCase().includes(q.toLowerCase())) return false;
+    return true;
+  });
+  return (
+    <>
+      <header className="topbar">
+        <div>
+          <h1>URL map</h1>
+          <p className="muted">Every URL found in the sitemap, plus pages already audited. Folders roll up Search Console clicks and an Analytics page export. The HTML audit still fetches at most {project.maxPages || 8} pages so the crawl stays fast.</p>
+        </div>
+        <button className="btn" type="button" disabled={Boolean(busy)} onClick={() => act({ type: "urlmap" })}>Rebuild map</button>
+      </header>
+      <div className="kpis">
+        <div><b>{n(map.counts.urls)}</b><span className="muted">URLs on the map</span></div>
+        <div><b>{n(map.counts.sitemap)}</b><span className="muted">in the sitemap</span></div>
+        <div><b>{n(map.counts.audited)}</b><span className="muted">HTML audited</span></div>
+        <div><b>{n(map.counts.sitemapOnly)}</b><span className="muted">sitemap only</span></div>
+        <div><b>{n(map.counts.clicks)}</b><span className="muted">Search clicks</span></div>
+        <div><b>{n(map.counts.views)}</b><span className="muted">Analytics views</span></div>
+      </div>
+      <form className="card" style={{ margin: "14px 0" }} onSubmit={(event) => { event.preventDefault(); act({ type: "ga", csv: pasted }); setPasted(""); }}>
+        <label htmlFor="ga-paste">Paste a Google Analytics page CSV</label>
+        <textarea id="ga-paste" value={pasted} onChange={(event) => setPasted(event.target.value)} placeholder={"Page path and screen class,Views\n/blog,120"} />
+        <button className="btn" type="submit" disabled={Boolean(busy) || pasted.trim().length < 10}>Import Analytics pages</button>
+      </form>
+      <div className="layout">
+        <section className="card">
+          <h2>Folders</h2>
+          <table>
+            <thead><tr><th>Folder</th><th>URLs</th><th>Audited</th><th>Clicks</th><th>Views</th><th>Position</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><button className="btn ghost" type="button" onClick={() => setSection("")}>All</button></td>
+                <td>{n(map.counts.urls)}</td><td>{n(map.counts.audited)}</td><td>{n(map.counts.clicks)}</td><td>{n(map.counts.views)}</td><td>—</td>
+              </tr>
+              {map.folders.map((folder) => (
+                <tr key={folder.folder}>
+                  <td><button className="btn ghost" type="button" onClick={() => setSection(folder.folder)}>{folder.folder}</button></td>
+                  <td>{n(folder.urls)}</td>
+                  <td>{n(folder.audited)}</td>
+                  <td>{n(folder.clicks)}</td>
+                  <td>{n(folder.views)}</td>
+                  <td>{folder.position ?? "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {map.folders.length === 0 ? <p className="empty">Rebuild the map after a crawl. A sitemap fills this in without downloading every page.</p> : null}
+        </section>
+        <section className="card">
+          <div className="toolbar">
+            <input type="text" placeholder="Filter URLs" value={q} onChange={(event) => setQ(event.target.value)} />
+            <button className="btn ghost" type="button" onClick={() => setGaps((value) => !value)}>{gaps ? "Showing unaudited" : "Sitemap not audited"}</button>
+          </div>
+          <table>
+            <thead><tr><th>URL</th><th>SEO</th><th>Clicks</th><th>Views</th></tr></thead>
+            <tbody>
+              {rows.slice(0, 80).map((url) => (
+                <tr key={url.url}>
+                  <td>
+                    <a href={url.url} target="_blank" rel="noreferrer">{url.title || url.url}</a>
+                    <div className="url">{url.inSitemap ? "sitemap" : "found in crawl"}{url.audited ? " · audited" : ""}{url.lastmod ? ` · ${url.lastmod}` : ""}</div>
+                  </td>
+                  <td>{url.seo ?? "—"}</td>
+                  <td>{n(url.clicks)}</td>
+                  <td>{n(url.views)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {rows.length > 80 ? <p className="muted">Showing 80 of {n(rows.length)}. Filter to narrow the list.</p> : null}
+          {rows.length === 0 ? <p className="empty">No URLs in this filter.</p> : null}
+        </section>
       </div>
     </>
   );

@@ -1,7 +1,8 @@
+import { guardAction } from "../../../../../lib/guard.js";
 import { buildDraft } from "../../../../../lib/content.js";
 import { runIntel } from "../../../../../lib/intel.js";
-import { crawlSite } from "../../../../../lib/crawl.js";
-import { parseGscCsv } from "../../../../../lib/gsc.js";
+import { crawlSite, discoverInventory } from "../../../../../lib/crawl.js";
+import { parseGaCsv, parseGscCsv } from "../../../../../lib/gsc.js";
 import { buildInsights } from "../../../../../lib/insights.js";
 import { getProject, saveProject } from "../../../../../lib/store.js";
 import { assertHttpUrl, hostLabel, sameHost } from "../../../../../lib/url.js";
@@ -15,6 +16,7 @@ function applyCrawl(project, crawl) {
   project.hasSitemap = crawl.hasSitemap;
   project.siteIssues = crawl.siteIssues;
   project.crawledAt = crawl.crawledAt;
+  project.inventory = crawl.inventory || project.inventory || [];
 }
 
 export async function POST(request, context) {
@@ -23,6 +25,8 @@ export async function POST(request, context) {
   if (!project) return Response.json({ error: "Workspace not found" }, { status: 404 });
   try {
     const body = await request.json();
+    const limited = await guardAction(request, body.type);
+    if (limited) return limited;
     if (body.type === "crawl") {
       project.maxPages = Math.max(1, Math.min(20, Number(body.maxPages) || project.maxPages || 8));
       applyCrawl(project, await crawlSite(project.url, project.maxPages));
@@ -88,6 +92,13 @@ export async function POST(request, context) {
       project.drafts = [draft, ...(project.drafts || [])].slice(0, 25);
     } else if (body.type === "removeDraft") {
       project.drafts = (project.drafts || []).filter((item) => item.id !== body.draftId);
+    } else if (body.type === "urlmap") {
+      const discovery = await discoverInventory(project.url, 1500);
+      project.hasRobots = discovery.hasRobots;
+      project.hasSitemap = discovery.hasSitemap;
+      project.inventory = discovery.entries.map((entry) => ({ ...entry, inSitemap: true }));
+    } else if (body.type === "ga") {
+      project.ga = { pages: parseGaCsv(body.csv || ""), importedAt: new Date().toISOString() };
     } else if (body.type === "intel") {
       const seed = String(body.seed || project.brandTerms?.[0] || project.host || "")
         .replace(/\s+/g, " ")

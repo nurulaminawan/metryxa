@@ -22,6 +22,7 @@ npm start
 ## What you can do
 
 - Audit crawled pages for indexation, titles, headings, schema, citations, and answer-first structure.
+- Build a URL map from the sitemap (up to 1,500 URLs) and roll clicks, impressions, and Analytics views up by folder. Paste a Google Analytics page CSV the same way as Search Console. The HTML audit still fetches a small sample so the crawl stays fast.
 - Import Search Console CSV exports for striking-distance queries, weak snippets, rank movement, and query/page overlap.
 - Crawl a competitor and list headings and reference sources they have that you do not.
 - Fan a prompt out into follow-up questions and see which crawled page covers each one.

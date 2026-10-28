@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   AuditView,
   CompetitorsView,
@@ -11,6 +11,7 @@ import {
   Overview,
   RankingsView,
   ReportView,
+  UrlMapView,
   TopicsView,
   VisibilityView,
 } from "./views";
@@ -18,6 +19,7 @@ import {
 const NAV = [
   ["overview", "Overview"],
   ["audit", "Audit"],
+  ["urlmap", "URL map"],
   ["keywords", "Keywords"],
   ["rankings", "Rankings"],
   ["competitors", "Competitors"],
@@ -28,6 +30,65 @@ const NAV = [
   ["drafts", "Drafts"],
   ["report", "Report"],
 ];
+
+function loadTurnstile() {
+  if (window.turnstile) return Promise.resolve(window.turnstile);
+  if (!loadTurnstile.promise) {
+    loadTurnstile.promise = new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+      script.async = true;
+      script.onload = () => resolve(window.turnstile);
+      script.onerror = () => reject(new Error("The human check could not be loaded."));
+      document.head.appendChild(script);
+    });
+  }
+  return loadTurnstile.promise;
+}
+
+function HumanCheck({ siteKey, test, onToken }) {
+  const holder = useRef(null);
+  const [message, setMessage] = useState("Loading the human check…");
+
+  useEffect(() => {
+    let widgetId;
+    let dead = false;
+    const node = holder.current;
+    loadTurnstile()
+      .then((turnstile) => {
+        if (dead || !node) return;
+        widgetId = turnstile.render(node, {
+          sitekey: siteKey,
+          callback: (value) => {
+            onToken(value);
+            setMessage("");
+          },
+          "expired-callback": () => onToken(""),
+          "error-callback": () => {
+            onToken("");
+            setMessage("The human check failed to load. Refresh the page.");
+          },
+        });
+        setMessage("");
+      })
+      .catch((err) => {
+        if (!dead) setMessage(err.message);
+      });
+    return () => {
+      dead = true;
+      if (widgetId != null && window.turnstile) window.turnstile.remove(widgetId);
+    };
+  }, [siteKey, onToken]);
+
+  return (
+    <div className="captcha">
+      <label>Human check</label>
+      <div ref={holder} />
+      {message ? <p className="muted">{message}</p> : null}
+      {test ? <p className="muted">This is Cloudflare’s public test check, so it always passes on this machine. Replace the Turnstile keys in .env.local before you publish.</p> : null}
+    </div>
+  );
+}
 
 async function readJson(response) {
   const data = await response.json().catch(() => ({}));
@@ -42,6 +103,9 @@ export default function App() {
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [booting, setBooting] = useState(true);
+  const [config, setConfig] = useState(null);
+  const [captchaToken, setCaptchaToken] = useState("");
+  const setToken = useRef((value) => setCaptchaToken(value)).current;
 
   useEffect(() => {
     fetch("/api/projects")
@@ -49,6 +113,10 @@ export default function App() {
       .then((data) => setProjects(data.projects || []))
       .catch((err) => setError(err.message))
       .finally(() => setBooting(false));
+    fetch("/api/config")
+      .then((response) => readJson(response))
+      .then(setConfig)
+      .catch(() => setConfig({ captcha: { enabled: false }, limits: { crawl: { limit: 8, windowMinutes: 10 } } }));
   }, []);
 
   async function openProject(id) {
@@ -80,6 +148,7 @@ export default function App() {
             name: form.get("name"),
             brand: form.get("brand"),
             maxPages: Number(form.get("maxPages")),
+            captchaToken,
           }),
         })
       );
@@ -135,6 +204,7 @@ export default function App() {
           Metryxa crawls your site, reads a Search Console export, and compares live competitor pages.
           Scores, keyword gaps, and drafts come from that evidence — search volume and backlink counts are not invented.
         </p>
+        <p className="sub"><a href="/guide">What the free SEO, AEO, and GEO checks cover</a></p>
         <div className="grid-2">
           <form className="card" onSubmit={createProject}>
             <div className="field">
@@ -160,10 +230,18 @@ export default function App() {
               <label htmlFor="brand">Brand names</label>
               <input id="brand" name="brand" type="text" placeholder="Comma separated, used for mention checks" />
             </div>
+            {config?.captcha?.enabled ? (
+              <HumanCheck siteKey={config.captcha.siteKey} test={config.captcha.test} onToken={setToken} />
+            ) : null}
             {error ? <div className="banner">{error}</div> : null}
-            <button className="btn" disabled={Boolean(busy)} type="submit">
+            <button className="btn" disabled={Boolean(busy) || (config?.captcha?.enabled && !captchaToken)} type="submit">
               {busy || "Crawl and open workspace"}
             </button>
+            <p className="muted">
+              {config?.limits?.crawl?.limit || 8} crawls every {config?.limits?.crawl?.windowMinutes || 10} minutes.
+              Each crawl leaves that window on its own clock, so the allowance slides forward as older crawls age out.
+              {config?.limits?.store === "redis" ? " The counts are stored in Redis." : " The counts stay in this server's memory until Redis is connected."}
+            </p>
             {busy ? <p className="muted">Fetching HTML, robots.txt, and the sitemap. A larger crawl can take a minute.</p> : null}
           </form>
           <aside className="card">
@@ -196,6 +274,7 @@ export default function App() {
   const screens = {
     overview: <Overview {...viewProps} />,
     audit: <AuditView {...viewProps} />,
+    urlmap: <UrlMapView {...viewProps} />,
     keywords: <KeywordsView {...viewProps} />,
     rankings: <RankingsView {...viewProps} />,
     competitors: <CompetitorsView {...viewProps} />,
